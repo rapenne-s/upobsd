@@ -13,38 +13,27 @@
 .\" ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 .\" OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\"
-.Dd Jan 17, 2021
+.Dd Jun 07, 2023
 .Dt UPOBSD 1
 .Os
 .Sh NAME
 .Nm upobsd
-.Nd download, verify and patch bsd.rd image
+.Nd patch bsd.rd image
 .Sh SYNOPSIS
 .Nm
 .Op Fl v
-.Op Fl m Ar mirror
-.Op Fl V Ar version
-.Op Fl a Ar arch
-.Op Fl p Ar signify-key
 .Op Fl i Ar install-response-file
 .Op Fl u Ar upgrade-response-file
 .Op Fl o Ar output
+.Op Fl f Ar bsd.rd
 .Sh DESCRIPTION
 .Nm
 is a
 .Xr ksh 1
-script designed to download, verify and optionally patch bsd.rd image.
+script designed to patch bsd.rd image.
 .Pp
 .Nm
-will download bsd.rd image using
-.Xr ftp 1
-from mirror defined in
-.Xr installurl 5 ,
-will verify the downloaded file using
-.Xr signify 1
-and local key inside
-.Pa /etc/signify
-to ensure integrity, and optionally patch the image for adding
+will patch the image by adding
 .Pa auto_install.conf
 or
 .Pa auto_upgrade.conf
@@ -69,34 +58,6 @@ Forces
 .Nm
 to show all steps of the process.
 If the input is a terminal, progress bar for downloading will be always showed.
-.It Fl m Ar mirror
-Use the given mirror URL.
-For the format, see
-.Xr installurl 5 .
-.It Fl V Ar version
-Select an operating system version.
-By default,
-.Nm
-will download bsd.rd for current running version.
-.It Fl a Ar arch
-Select a specific architecture.
-By default,
-.Nm
-will use current system architecture as
-.Xr uname 1
-report it.
-.It Fl p Ar signify-key
-Specify a particular file as public-key for
-.Xr signify 1
-in order to check
-.Pa SHA256.sig
-and
-.Pa bsd.rd
-files.
-By default, a key from
-.Pa /etc/signify
-is selected using the requested operating system version.
-If the default key fails, a second try with the next version is done.
 .It Fl i Ar install-response-file
 Adds
 .Ar install-response-file
@@ -118,11 +79,11 @@ are used, only the latest option on command-line is considered.
 Selects a different output name from
 .Pa bsd.rd
 in the current directory.
+.It Fl f Ar bsd.rd
+is used to give the path to the bsd.rd file to use as an input
 .El
 .Sh SEE ALSO
 .Xr doas 1 ,
-.Xr ftp 1 ,
-.Xr signify 1 ,
 .Xr autoinstall 8 ,
 .Xr sysupgrade 8
 .Sh AUTHORS

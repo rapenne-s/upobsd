@@ -19,27 +19,16 @@ set -eu
 PATH='/sbin:/bin:/usr/sbin:/usr/bin'
 
 VERBOSE=0
-MIRROR=$(sed -e '/^$/d' -e '/^#/d' -e 'q' /etc/installurl)
-ARCH=$(uname -m)
-SIGNIFY_KEY=''
+FILE='/dev/linux'
 AUTO='no'
 RESPONSE_FILE=''
 OUTPUT="${PWD}/bsd.rd"
-
-# get kernel version
-set -A _KERNV -- $(sysctl -n kern.version | sed 's/^OpenBSD \([0-9]\)\.\([0-9]\)\([^ ]*\).*/\1.\2 \1\2 \3/;q')
-if ((${#_KERNV[*]} == 2)) ; then
-	OS_VERSION=${_KERNV[0]}
-else
-	OS_VERSION='snapshots'
-fi
-SIGNIFY_VERSION=${_KERNV[1]}
 
 UID=$(id -u)
 WRKDIR=''
 
 uo_usage() {
-	echo "usage: ${0##*/} [-v] [-m mirror] [-V version] [-a arch] [-p signify-key] [-i install-response-file] [-u upgrade-response-file] [-o output]" >&2
+	echo "usage: ${0##*/} [-v] [-i install-response-file] [-u upgrade-response-file] [-o output] -f /path/to/bsd.rd" >&2
 	exit 1
 }
 
@@ -79,63 +68,6 @@ trap "uo_trap" 1 2 3 13 15 ERR
 
 uo_verbose() {
 	[[ ${VERBOSE} != 0 ]] && echo "${@}"
-}
-
-uo_ftp() {
-	local dest=${1}
-	local url=${2}
-
-	ftp -V -o "${WRKDIR}/${dest}" -- "${url}"
-}
-
-uo_download() {
-	local url="${MIRROR}/${OS_VERSION}/${ARCH}"
-
-	uo_verbose "downloading bsd.rd (and SHA256.sig): ${url}"
-
-	uo_ftp SHA256.sig "${url}/SHA256.sig"
-	uo_ftp bsd.rd "${url}/bsd.rd"
-
-	uo_check_signature
-}
-
-uo_check_signature() {
-	[ -r "${WRKDIR}/SHA256.sig" ] || \
-		uo_err 2 "uo_check_signature: no SHA256.sig in WRKDIR"
-
-	if [ -z "${SIGNIFY_KEY}" ]; then
-		uo_signify \
-			"/etc/signify/openbsd-${SIGNIFY_VERSION}-base.pub" \
-			"/etc/signify/openbsd-$(( ${SIGNIFY_VERSION} + 1 ))-base.pub"
-	else
-		uo_signify "${SIGNIFY_KEY}"
-	fi
-}
-
-uo_signify() {
-	local signify_all_keys="$*"
-
-	while [[ $# != 0 ]]; do
-		local signify_key=${1}
-
-		echo "checking signature: ${signify_key}"
-
-		[ -e "${signify_key}" ] || \
-			uo_err 1 "uo_check_signature: file not found: ${signify_key}"
-
-		if ( cd "${WRKDIR}" && \
-			signify -qC -p "${signify_key}" -x SHA256.sig bsd.rd ) ; then
-			break
-		fi
-
-		shift
-	done
-
-	if [[ $# = 0 ]]; then
-		uo_err 1 "invalid signature: ${signify_all_keys}"
-	else
-		uo_verbose "signature is valid"
-	fi
 }
 
 uo_priv() {
