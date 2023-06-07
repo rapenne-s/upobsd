@@ -1,6 +1,7 @@
 #!/bin/ksh
 #
 # Copyright (c) 2017-2018 Sebastien Marie <semarie@online.fr>
+# Copyright (c) 2023 Solène Rapenne <solene@perso.pw>
 #
 # Permission to use, copy, modify, and distribute this software for any
 # purpose with or without fee is hereby granted, provided that the above
@@ -48,8 +49,8 @@ uo_cleanup() {
 
 	if [[ -d "${WRKDIR}" ]]; then
 		rm -f -- \
-			"${WRKDIR}/SHA256.sig" \
 			"${WRKDIR}/bsd.rd" \
+			"${WRKDIR}/bsd" \
 			"${WRKDIR}/ramdisk"
 
 		[[ -d "${WRKDIR}/ramdisk.d" ]] && \
@@ -155,8 +156,11 @@ uo_addfile() {
 
 	uo_verbose "adding response file: ${dest}: ${src}"
 
+	# uncompress the bsd.rd file
+	zcat "$WRKDIR/bsd.rd" > "$WRKDIR/bsd"
+
 	# extract ramdisk from bsd.rd
-	rdsetroot -x "${WRKDIR}/bsd.rd" "${WRKDIR}/ramdisk"
+	rdsetroot -x "${WRKDIR}/bsd" "${WRKDIR}/ramdisk"
 
 	# create mountpoint
 	mkdir "${WRKDIR}/ramdisk.d"
@@ -202,7 +206,11 @@ uo_addfile() {
 	rmdir "${WRKDIR}/ramdisk.d"
 
 	# put ramdisk back in bsd.rd
-	rdsetroot "${WRKDIR}/bsd.rd" "${WRKDIR}/ramdisk"
+	rdsetroot "${WRKDIR}/bsd" "${WRKDIR}/ramdisk"
+
+	# compress back
+	gzip "${WRKDIR}/bsd"
+  	mv "${WRKDIR}/bsd.gz" "${WRKDIR}/bsd.rd"
 }
 
 uo_output() {
@@ -212,47 +220,14 @@ uo_output() {
 	mv -- "${WRKDIR}/bsd.rd" "${OUTPUT}"
 }
 
-uo_arch_endianness() {
-	case "${1}" in
-	hppa|luna88k|macppc|octeon|sgi)
-		echo "MSB" ;;
-	alpha|amd64|arm64|armv7|i386|landisk|loongson)
-		echo "LSB" ;;
-	*)
-		uo_err 1 "unknown arch: ${1}"
-		echo "---" ;;
-	esac
-}
-
-uo_check_arch_endianness() {
-	[[ $(uo_arch_endianness "${1}") != $(uo_arch_endianness "${2}") ]] && \
-		uo_err 1 "incompatible endianness for patching: ${1} ${2}"
-}
-
-uo_check_arch_patchable() {
-	case "${1}" in
-	alpha|sparc64|hppa)
-		uo_err 1 "unpatchable arch (stripped): ${_arch}" ;;
-
-	arm64|i386|loongson|macppc|sgi|amd64|armv7|landisk|luna88k|octeon|socppc)
-		;;
-
-	*)
-		echo "warn: unknown arch (could be unpatchable): ${1}" >&2 ;;
-	esac
-}
-
 # parse command-line
-while getopts 'hvm:V:a:p:i:u:o:' arg; do
+while getopts 'hvm:V:a:p:i:u:o:f:' arg; do
 	case "${arg}" in
 	v)	VERBOSE=1 ;;
-	m)	MIRROR="${OPTARG}" ;;
-	V)	OS_VERSION="${OPTARG}" ;;
-	a)	ARCH="${OPTARG}" ;;
-	p)	SIGNIFY_KEY="${OPTARG}" ;;
 	i)	AUTO='install'; RESPONSE_FILE="${OPTARG}" ;;
 	u)	AUTO='upgrade'; RESPONSE_FILE="${OPTARG}" ;;
 	o)	OUTPUT="${OPTARG}" ;;
+	f)      FILE="${OPTARG}" ;;
 	*)	uo_usage ;;
 	esac
 done
@@ -260,26 +235,17 @@ done
 shift $(( OPTIND -1 ))
 [[ $# -ne 0 ]] && uo_usage
 
-# update SIGNIFY_VERSION according to OS_VERSION
-case "${OS_VERSION}" in
-[0-9].[0-9])	SIGNIFY_VERSION="${OS_VERSION%.[0-9]}${OS_VERSION#[0-9].}" ;;
-esac
-
 [[ -n "${RESPONSE_FILE}" && ! -e ${RESPONSE_FILE} ]] && \
 	uo_err 1 "file not found: ${RESPONSE_FILE}"
-
-# check for patchable archs
-if [[ ${AUTO} != 'no' ]]; then
-	uo_check_arch_endianness "$(uname -m)" "${ARCH}"
-	uo_check_arch_patchable "${ARCH}"
-fi
 
 # create working directory
 WRKDIR=$(mktemp -dt upobsd.XXXXXXXXXX) || \
 	uo_err 1 "unable to create temporary directory"
 
-# download and check files
-uo_download
+[[ ! -f "${FILE}" ]] && \
+        uo_err 1 "can't find ${FILE}"
+
+cp "${FILE}" "${WRKDIR}/bsd.rd"
 
 # add response-file if requested
 [[ ${AUTO} != 'no' ]] && \
